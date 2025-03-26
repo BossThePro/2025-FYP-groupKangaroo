@@ -14,7 +14,7 @@ def readImageFile(file_path):
     img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
 
     return img_rgb, img_gray
-
+#PETE HERE
 
 def saveImageFile(img_rgb, file_path):
     try:
