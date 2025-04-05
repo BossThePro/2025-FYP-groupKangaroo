@@ -15,3 +15,7 @@ def removeHair(img_org, img_gray, kernel_size=25, threshold=10, radius=3):
     img_out = cv2.inpaint(img_org, thresh, radius, cv2.INPAINT_TELEA)
 
     return blackhat, thresh, img_out
+
+
+
+
