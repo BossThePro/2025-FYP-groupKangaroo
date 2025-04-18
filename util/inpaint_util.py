@@ -1,5 +1,7 @@
 import cv2
-
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage.color import rgb2gray
 
 def removeHair(img_org, img_gray, kernel_size=25, threshold=10, radius=3):
     # kernel for the morphological filtering
@@ -18,4 +20,20 @@ def removeHair(img_org, img_gray, kernel_size=25, threshold=10, radius=3):
 
 
 
+test_filepath = "data/ISIC_0001769.jpg"
 
+
+
+im = cv2.imread(test_filepath)
+im2 = im[0:1500,:,:]
+im_gray = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
+blurred = cv2.GaussianBlur(im_gray, (5, 5), 0)
+
+# Apply Canny edge detection
+edges = cv2.Canny(blurred, 10, 20)
+
+
+# Display the result
+plt.imshow(edges, cmap="gray")
+plt.title("Skin Lesion Border using Canny Edge Detection")
+plt.show()
