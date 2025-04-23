@@ -31,11 +31,11 @@ segmented_image = label2rgb(segments, masked_image, kind='avg')
 # Plot the final result
 fig, ax = plt.subplots(1, 2, figsize=(12, 6))
 ax[0].imshow(image)
-ax[0].set_title("Original Image")
+ax[0].set_title("Original Image", fontsize=25)
 ax[0].axis('off')
 
 ax[1].imshow(segmented_image)
-ax[1].set_title("SLIC Superpixels on masked image")
+ax[1].set_title("SLIC Superpixels on masked image", fontsize=25)
 ax[1].axis('off')
 
 plt.tight_layout()
@@ -104,7 +104,7 @@ if n_clusters > 0:
     kmeans.fit(lesion_pixels)
     
     labels = kmeans.labels_
-    centers = kmeans.cluster_centers_.astype(np.uint8)
+    centers = kmeans.cluster_centers_
 
     # Create image for clustered colors
     clustered_image = np.zeros_like(image)
@@ -120,18 +120,46 @@ if n_clusters > 0:
     # Plot everything
     fig, ax = plt.subplots(1, 3, figsize=(18, 6))
     ax[0].imshow(image)
-    ax[0].set_title("Original Image")
+    ax[0].set_title("Original Image", fontsize=25)
     ax[0].axis('off')
 
     ax[1].imshow(clustered_image)
-    ax[1].set_title("K-Means Segmented Colors")
+    ax[1].set_title("K-Means Segmented Colors",fontsize=25)
     ax[1].axis('off')
 
     ax[2].imshow(outlined_image)
-    ax[2].set_title("Cluster Outlines (on original)")
+    ax[2].set_title("Cluster Outlines (on original)",fontsize=25)
     ax[2].axis('off')
 
     plt.tight_layout()
     plt.show()
 else:
     print("No important colors found, skipping K-Means clustering.")
+
+#Putting together the features to create a final color_feature we can use in the ML model
+
+
+#For SLIC + color decision rules, we define a ratio of colors based on our 6 colors:
+color_ratios = []
+for color in reference_colors:
+    count = color_counter.get(color ,0)
+    color_ratios.append(count/total_superpixels)
+    
+color_ratios = np.array(color_ratios)
+#For SLIC + K-means, we take the average rgb value of each cluster in the lesion (to see if colors vary a lot),  and the proportion (to see if its mostly uniform)
+
+#Mean of RGB Values
+cluster_centers = kmeans.cluster_centers_.flatten()
+
+#Proportion of each cluster
+cluster_ratios = []
+for i in range(n_clusters):
+    ratio = np.mean(kmeans.labels_ == i)
+    cluster_ratios.append(ratio)
+
+cluster_ratios = np.array(cluster_ratios)
+
+#Final array of features
+color_features = np.concatenate((color_ratios, cluster_centers, cluster_ratios))
+
+print(color_features)
