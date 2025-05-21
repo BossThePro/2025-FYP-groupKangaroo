@@ -144,22 +144,14 @@ color_ratios = []
 for color in reference_colors:
     count = color_counter.get(color ,0)
     color_ratios.append(count/total_superpixels)
-    
+
 color_ratios = np.array(color_ratios)
-#For SLIC + K-means, we take the average rgb value of each cluster in the lesion (to see if colors vary a lot),  and the proportion (to see if its mostly uniform)
+#For SLIC + K-means, we take the average rgb value of each cluster in the lesion (to see if colors vary a lot between clusters)
 
 #Mean of RGB Values
 cluster_centers = kmeans.cluster_centers_.flatten()
 
-#Proportion of each cluster
-cluster_ratios = []
-for i in range(n_clusters):
-    ratio = np.mean(kmeans.labels_ == i)
-    cluster_ratios.append(ratio)
-
-cluster_ratios = np.array(cluster_ratios)
-
 #Final array of features
-color_features = np.concatenate((color_ratios, cluster_centers, cluster_ratios))
+color_features = np.concatenate((color_ratios, cluster_centers))
 
 print(color_features)
