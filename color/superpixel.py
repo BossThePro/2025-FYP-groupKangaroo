@@ -11,27 +11,40 @@ from collections import defaultdict
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
-import cv2
+import joblib
+import json
+##### CHANGE THIS FLAG DEPENDING ON TRAINING OR TESTING -> IMPORTANT OR ELSE TRAINING WILL HAVE TO BE REDONE ENTIRELY OR GIT REVERSED TO PREVIOUS STATE
+is_training = False
+
+#scaler file for keeping track of the scale based on training data -> will not be changed in case of testing
+scaler_file = "../data/colorScaler.pkl" 
+min_max_weight_file = "../data/colorMinMaxWeight.json"
+if is_training == True:
+    output_csv = "../data/training_color_final_scores.csv"
+else:
+    output_csv = "../data/test_color_final_scores.csv"
+
 ###### Implementing SLIC superpixel segmentation
 imgcount = 0
 #Loading the images
-
+filePathImage = input("Enter the file path of images used: ")
+filePathMask = input("Enter the file path of masks used: ")
 df = pd.read_csv("../data/training_data.csv")
 df["img_id"] = df["img_id"].str.replace(".png", "") 
-df = df[0:100]
+df = df[201:300]
 imageList = df["img_id"]
 skippedImageList = []
 print(imageList)
 color_features_list = []
 for img_id in imageList:
     print(f"Current count: {imgcount}\n Current image: {img_id}")
-    image = io.imread(f"../../pds dataset/images/{img_id}.png")
+    image = io.imread(f"{filePathImage}/{img_id}.png")
     #Removing the alpha channel in order to get SLIC superpixel segmentation for the RGB values
     if(image.shape[2] == 4):
        image = image[:, :, :3]
     #Applying the given mask we got from the dataset on learnit1
     try:
-        mask = io.imread(f"../../../Downloads/lesion_masks/{img_id}_mask.png")
+        mask = io.imread(f"{filePathMask}/{img_id}_mask.png")
     except:
         skippedImageList.append(img_id)
         imgcount += 1
@@ -49,7 +62,7 @@ for img_id in imageList:
     segments = slic(masked_image, n_segments=100, compactness=10, sigma=1, start_label=1)
 
     #Create a visualization of how it looks after
-    segmented_image = label2rgb(segments, masked_image, kind='avg')
+    #segmented_image = label2rgb(segments, masked_image, kind='avg')
 
     #Plot the final result (commented out for model since this is not needed for the model itself, but nice to see visually to see what happens)
     # fig, ax = plt.subplots(1, 2, figsize=(12, 6))
@@ -130,15 +143,15 @@ for img_id in imageList:
         centers = kmeans.cluster_centers_
 
         #Create an image for clustered colors
-        clustered_image = np.zeros_like(image)
-        clustered_image[mask] = centers[labels]
+        #clustered_image = np.zeros_like(image)
+        #clustered_image[mask] = centers[labels]
 
         #Create a label map to match the shape of the image
-        label_map = np.zeros(mask.shape, dtype=np.int32)
-        label_map[mask] = labels + 1  # Avoid background = 0
+       # label_map = np.zeros(mask.shape, dtype=np.int32)
+        #label_map[mask] = labels + 1  # Avoid background = 0
 
         #Draw the cluster boundaries
-        outlined_image = mark_boundaries(image, label_map, color=(1, 0, 0), mode='thick')  # red lines
+        #outlined_image = mark_boundaries(image, label_map, color=(1, 0, 0), mode='thick')  # red lines
 
         #Plot everything (also commented out since this is not needed for final model, but nice to visualize)
         # fig, ax = plt.subplots(1, 3, figsize=(18, 6))
@@ -184,11 +197,15 @@ for img_id in imageList:
 
     imgcount += 1
 
-#Normalizes from 0 to 1
-scaler = MinMaxScaler()
-
+#Normalizes from 0 to 1 on training data
 color_features = np.array(color_features_list)
-scaled_features = scaler.fit_transform(color_features)
+if is_training:
+    scaler = MinMaxScaler()
+    scaled_features = scaler.fit_transform(color_features)
+    joblib.dump(scaler, scaler_file)
+else:
+    scaler = joblib.load(scaler_file)
+    scaled_features = scaler.transform(color_features)
 
 #Using a weighted average to get one final score, these values will be refined over time through training the model:
 
@@ -205,10 +222,24 @@ weights = np.array([
 weights = weights / np.sum(weights)
 
 color_final = np.dot(scaled_features, weights)
-#Normalizing the final scores to (0, 1) in the weighted final average
-color_final = (color_final - color_final.min()) / (color_final.max() - color_final.min())
-color_min = float(color_final.min())
-color_max = float(color_final.max())
+#Normalizing the final scores to (0, 1) in the weighted final average, and differentiating between training and test data
 
+if is_training == True:
+    color_final_min = color_final.min()
+    color_final_max = color_final.max()
+    color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
+    with open(f"{min_max_weight_file}", "w") as f:
+        json.dump({"min": float(color_final_min), "max": float(color_final_max)}, f)
+else:
+    #If testing data hits extremas outside of the min max from the testing range, this will lead to values outside of the [0,1] scale, the idea here is that it helps the model consider it a new extrema even more extreme than the training data, hence seeing an outlier greater than 1 or less than 0 should in theory lead to an easier decision towards either side of the decision boundary
+    with open(f"{min_max_weight_file}", "r") as f:
+        min_max = json.load(f)
+    color_final_min = min_max["min"]
+    color_final_max = min_max["max"]
+    color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
 #Saving the score from training into a file for use in the testing phase - needs to be done
-print(color_final)
+df_scores = pd.DataFrame({
+    "img_id": df["img_id"][:len(color_final)],
+    "color_score": color_final
+})
+df_scores.to_csv(output_csv, index=False)
