@@ -2,7 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+#ignore images folder
+*images
 #ignore pictures
 *.png
 *.jpg
