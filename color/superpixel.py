@@ -194,12 +194,12 @@ def finalScore(scaled_features, is_training, min_max_weight_file, weights):
         with open(f"{min_max_weight_file}", "w") as f:
             json.dump({"min": float(color_final_min), "max": float(color_final_max)}, f)
     else:
-        #If testing data hits extremas outside of the min max from the testing range, this will lead to values outside of the [0,1] scale, the idea here is that it helps the model consider it a new extrema even more extreme than the training data, hence seeing an outlier greater than 1 or less than 0 should in theory lead to an easier decision towards either side of the decision boundary
         with open(f"{min_max_weight_file}", "r") as f:
             min_max = json.load(f)
         color_final_min = min_max["min"]
         color_final_max = min_max["max"]
         color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
+        #If testing data hits extremas outside of the min max from the testing range, we limit the data to the [0, 1] scale in order to keep predictions intact (unintended behaviour can occur using certain models if they are outside of known range)
         color_final = np.clip(color_final, 0, 1)
     return color_final
 
