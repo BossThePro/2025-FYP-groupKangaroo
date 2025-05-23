@@ -13,51 +13,26 @@ from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
 import joblib
 import json
-##### CHANGE THIS FLAG DEPENDING ON TRAINING OR TESTING -> IMPORTANT OR ELSE TRAINING WILL HAVE TO BE REDONE ENTIRELY OR GIT REVERSED TO PREVIOUS STATE
-is_training = False
-
-#scaler file for keeping track of the scale based on training data -> will not be changed in case of testing
-scaler_file = "../data/colorScaler.pkl" 
-min_max_weight_file = "../data/colorMinMaxWeight.json"
-if is_training == True:
-    output_csv = "../data/training_color_final_scores.csv"
-else:
-    output_csv = "../data/test_color_final_scores.csv"
-
-###### Implementing SLIC superpixel segmentation
-imgcount = 0
-#Loading the images
-filePathImage = input("Enter the file path of images used: ")
-filePathMask = input("Enter the file path of masks used: ")
-df = pd.read_csv("../data/training_data.csv")
-df["img_id"] = df["img_id"].str.replace(".png", "") 
-df = df[201:300]
-imageList = df["img_id"]
-skippedImageList = []
-print(imageList)
-color_features_list = []
-for img_id in imageList:
-    print(f"Current count: {imgcount}\n Current image: {img_id}")
-    image = io.imread(f"{filePathImage}/{img_id}.png")
-    #Removing the alpha channel in order to get SLIC superpixel segmentation for the RGB values
-    if(image.shape[2] == 4):
-       image = image[:, :, :3]
-    #Applying the given mask we got from the dataset on learnit1
-    try:
+def loadImage(img_id, filePathImage, filePathMask):
+    try: 
+        image = io.imread(f"{filePathImage}/{img_id}.png")
+        #Removing the alpha channel in order to get SLIC superpixel segmentation for the RGB values
+        if(image.shape[2] == 4):
+            image = image[:, :, :3]
+        #Applying the given mask we got from the dataset on learnit1
         mask = io.imread(f"{filePathMask}/{img_id}_mask.png")
+        mask = mask > 127
+        if mask.ndim == 3:
+            mask = rgb2gray(mask)
+            mask = mask > 0.5
+        #Masking the image by setting the background to 0
+        masked_image = image * np.expand_dims(mask, axis=-1)  
+        return image, masked_image, mask
     except:
-        skippedImageList.append(img_id)
-        imgcount += 1
-        continue 
-    mask = mask > 127
-
-    if mask.ndim == 3:
-        mask = rgb2gray(mask)
-        mask = mask > 0.5
-    #Masking the image by setting the background to 0
-    masked_image = image * np.expand_dims(mask, axis=-1)  
-
-
+        return None, None, None 
+   
+    
+def extractColorFeatures(image, masked_image, mask, reference_colors):
     #Apply the SLIC superpixel segmentation
     segments = slic(masked_image, n_segments=100, compactness=10, sigma=1, start_label=1)
 
@@ -83,10 +58,8 @@ for img_id in imageList:
 
     for label in np.unique(segments):
         if label == 0: continue  # skip background if needed
-
         #Create mask for each superpixel
         region_mask = segments == label
-
         #Only keep it if it's mostly within the lesion mask
         if np.sum(mask[region_mask]) / np.sum(region_mask) > 0.5:
             # Average color within this superpixel
@@ -96,14 +69,7 @@ for img_id in imageList:
     superpixel_colors = np.array(superpixel_colors)
 
     #Compare to table of colors which also includes the threshold described in the paper
-    reference_colors = {
-        "light_brown": ([200, 155, 130], 0.12),
-        "middle_brown": ([160, 100, 67], 0.25),
-        "dark_brown": ([126, 67, 48], 0.2),
-        "white": ([230, 230, 230], 0.25),
-        "black": ([31, 26, 26], 0.25),
-        "blue_grey": ([75, 112, 137], 0.5)
-    }
+
     #Keep a counter for each color and their appearance in a given image
     color_counter = defaultdict(int)
 
@@ -123,13 +89,13 @@ for img_id in imageList:
     for color_name, count in color_counter.items():
         if count / total_superpixels >= 0.05:
             important_colors.append(color_name)
-    #Print a list of the important colors
-    print(important_colors)
+    #Return nothing for color if no important colors are found
+    if len(important_colors) == 0:
+        return None
 
 
     #Use K Means to differentiate between colors
-
-    # Flatten lesion pixels (RGB)
+    #Flatten lesion pixels (RGB)
     lesion_pixels = image[mask].reshape(-1, 3)
 
     n_clusters = len(important_colors)
@@ -138,10 +104,6 @@ for img_id in imageList:
         #Apply KMeans
         kmeans = KMeans(n_clusters=n_clusters, random_state=42)
         kmeans.fit(lesion_pixels)
-        
-        labels = kmeans.labels_
-        centers = kmeans.cluster_centers_
-
         #Create an image for clustered colors
         #clustered_image = np.zeros_like(image)
         #clustered_image[mask] = centers[labels]
@@ -178,8 +140,7 @@ for img_id in imageList:
         color_ratios = []
         for color in reference_colors:
             count = color_counter.get(color ,0)
-            if total_superpixels != 0:
-                color_ratios.append(count/total_superpixels)
+            color_ratios.append(count/total_superpixels)
 
         color_ratios = np.array(color_ratios)
         #For SLIC + K-means, we take the average rgb value of each cluster in the lesion (to see if colors vary a lot between clusters)
@@ -191,55 +152,57 @@ for img_id in imageList:
         cluster_std = cluster_centers.reshape(-1,3).std(axis=0)
         #Final array of features
         features = np.concatenate((color_ratios, cluster_mean, cluster_std))
-        color_features_list.append(features)
+        return features
     else:
         print("No important colors found, skipping K-Means clustering.")
 
-    imgcount += 1
+
+
+# for img_id in imageList:
+#     image, masked_image, mask = loadImage(img_id, filePathImage, filePathMask)
+#     if image is None or masked_image is None or mask is None:
+#         print(f"Skipping image {img_id} due to missing file(s)")
+#         skippedImageList.append(img_id)
+#         continue
+#     features = extractColorFeatures(image, masked_image, mask, reference_colors)
+#     if features is None:
+#         print(f"Skipping {img_id} due to no important colors found")
+#         skippedImageList.append(img_id)
+#         continue
+#     color_features_list.append(features)
+
 
 #Normalizes from 0 to 1 on training data
-color_features = np.array(color_features_list)
-if is_training:
-    scaler = MinMaxScaler()
-    scaled_features = scaler.fit_transform(color_features)
-    joblib.dump(scaler, scaler_file)
-else:
-    scaler = joblib.load(scaler_file)
-    scaled_features = scaler.transform(color_features)
+def saveFeatures(features, is_training, scaler_file, min_max_weight_file):
+    if is_training:
+        scaler = MinMaxScaler()
+        scaled_features = scaler.fit_transform(features)
+        joblib.dump(scaler, scaler_file)
+    else:
+        scaler = joblib.load(scaler_file)
+        scaled_features = scaler.transform(features)
+    return scaled_features
 
-#Using a weighted average to get one final score, these values will be refined over time through training the model:
 
-weights = np.array([
-    1,  #light brown
-    1,  #middle brown
-    2,  #dark brown
-    1,  #white
-    2,  #black
-    2,  #blue-grey
-    0.5, 0.5, 0.5, #mean R, G, B
-    1.5, 1.5, 1.5 #std R, G, B
-])
-weights = weights / np.sum(weights)
+def finalScore(scaled_features, is_training, min_max_weight_file, weights):
+    color_final = np.dot(scaled_features, weights)
+    #Normalizing the final scores to (0, 1) in the weighted final average, and differentiating between training and test data
+    if is_training == True:
+        color_final_min = color_final.min()
+        color_final_max = color_final.max()
+        color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
+        with open(f"{min_max_weight_file}", "w") as f:
+            json.dump({"min": float(color_final_min), "max": float(color_final_max)}, f)
+    else:
+        #If testing data hits extremas outside of the min max from the testing range, this will lead to values outside of the [0,1] scale, the idea here is that it helps the model consider it a new extrema even more extreme than the training data, hence seeing an outlier greater than 1 or less than 0 should in theory lead to an easier decision towards either side of the decision boundary
+        with open(f"{min_max_weight_file}", "r") as f:
+            min_max = json.load(f)
+        color_final_min = min_max["min"]
+        color_final_max = min_max["max"]
+        color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
+    return color_final
 
-color_final = np.dot(scaled_features, weights)
-#Normalizing the final scores to (0, 1) in the weighted final average, and differentiating between training and test data
 
-if is_training == True:
-    color_final_min = color_final.min()
-    color_final_max = color_final.max()
-    color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
-    with open(f"{min_max_weight_file}", "w") as f:
-        json.dump({"min": float(color_final_min), "max": float(color_final_max)}, f)
-else:
-    #If testing data hits extremas outside of the min max from the testing range, this will lead to values outside of the [0,1] scale, the idea here is that it helps the model consider it a new extrema even more extreme than the training data, hence seeing an outlier greater than 1 or less than 0 should in theory lead to an easier decision towards either side of the decision boundary
-    with open(f"{min_max_weight_file}", "r") as f:
-        min_max = json.load(f)
-    color_final_min = min_max["min"]
-    color_final_max = min_max["max"]
-    color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
-#Saving the score from training into a file for use in the testing phase - needs to be done
-df_scores = pd.DataFrame({
-    "img_id": df["img_id"][:len(color_final)],
-    "color_score": color_final
-})
-df_scores.to_csv(output_csv, index=False)
+#Getting the scaled features
+
+
