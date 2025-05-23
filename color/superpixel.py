@@ -200,6 +200,7 @@ def finalScore(scaled_features, is_training, min_max_weight_file, weights):
         color_final_min = min_max["min"]
         color_final_max = min_max["max"]
         color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
+        color_final = np.clip(color_final, 0, 1)
     return color_final
 
 

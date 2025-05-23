@@ -53,10 +53,10 @@ for imageName in imageList:
     features = color.extractColorFeatures(image, masked_image, mask, reference_colors=reference_colors)
     
     if features is not None:
-        print(f"Feature extraction for {imageName} has been completed successfully!")
+        print(f"Color feature extraction for {imageName} has been completed successfully!")
         color_features_list.append(features)
     else:
-        print(f"Skipping {imageName} due to no important colors.")
+        print(f"Skipping color feature extraction for {imageName} due to no important colors.")
         skippedImageList.append(imageName)
 
 color_features = np.array(color_features_list)
