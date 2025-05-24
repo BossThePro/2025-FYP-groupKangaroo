@@ -14,28 +14,28 @@ from skimage.color import rgb2lab
 from sklearn.cluster import KMeans
 from skimage.filters import gaussian
 class Border:
-    def compactness(self,mask_file):
-        #Reads file
+    def compactness(self, mask_file):
+        # Reads the file as grayscale
         mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
-        #Makes it grayscaled, just in case.
         if mask is None:
-            return 0.0
+            return 0.0  # Failed to load
         
-        #Counts all pixels brigther than 0.5
+        # Ensure binary mask: threshold at 127
         mask_bin = (mask > 127).astype(bool)
         
-        #We sum all the true values.
+        # Check for empty mask
         A = np.sum(mask_bin)
+        if A == 0:
+            return 0.0  # No area to compute
 
-        #We use a morphology disk
-        struct = morphology.disk(2)
-        
-        #mask_eroded  = morphology.binary_erosion(mask_bin, struct)
-        #Returns total perimeter of all objects in BINARY image.
+        # Compute perimeter
         L = measure.perimeter(mask_bin, neighborhood=4)
-        #migth get easily influenced on the perimeter.
-        compactness = (4*np.pi*A) / (L**2)
+        if L == 0:
+            return 0.0  # Avoid division by zero
 
+        # Compute compactness
+        compactness = (4 * np.pi * A) / (L ** 2)
+        
         return compactness
     """
     def compact_CV(self, mask_file):
@@ -253,6 +253,8 @@ class Border:
         if not isinstance(mask, np.ndarray) or mask.dtype != bool:
             mask = mask.astype(bool)
         if np.sum(mask) == 0:
+            return 0.0
+        if np.sum(mask) < 50:
             return 0.0
 
         # Preprocessing - convert to LAB and use L channel
