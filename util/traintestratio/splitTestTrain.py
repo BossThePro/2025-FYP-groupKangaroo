@@ -15,7 +15,7 @@ with open("sample_seed.txt", "r") as f:
    seed = int(f.read())
 
 #Getting the training and test data out using pandas, with our predefined seed for recreatability
-df = pd.read_csv("../../data/metadata_clean_masks_only.csv")
+df = pd.read_csv("../../data/metadata_clean_valid_mask_only.csv")
 df.rename(columns={"Unnamed: 0": "index"}, inplace=True)
 training_data = df.sample(frac=0.73, random_state = seed)
 test_data = df.drop(training_data.index)
