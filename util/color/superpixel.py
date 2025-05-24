@@ -11,8 +11,6 @@ from collections import defaultdict
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
-import joblib
-import json
 def loadImage(img_id, filePathImage, filePathMask):
     try: 
         image = io.imread(f"{filePathImage}/{img_id}.png")
@@ -157,6 +155,7 @@ def extractColorFeatures(image, masked_image, mask, reference_colors):
         print("No important colors found, skipping K-Means clustering.")
 
 
+#The part below is no longer used, check out colorTest for new version of handling this part
 
 # for img_id in imageList:
 #     image, masked_image, mask = loadImage(img_id, filePathImage, filePathMask)
@@ -173,37 +172,33 @@ def extractColorFeatures(image, masked_image, mask, reference_colors):
 
 
 #Normalizes from 0 to 1 on training data
-def saveFeatures(features, is_training, scaler_file, min_max_weight_file):
-    if is_training:
-        scaler = MinMaxScaler()
-        scaled_features = scaler.fit_transform(features)
-        joblib.dump(scaler, scaler_file)
-    else:
-        scaler = joblib.load(scaler_file)
-        scaled_features = scaler.transform(features)
-    return scaled_features
+# def saveFeatures(features, is_training, scaler_file, min_max_weight_file):
+#     if is_training:
+#         scaler = MinMaxScaler()
+#         scaled_features = scaler.fit_transform(features)
+#         joblib.dump(scaler, scaler_file)
+#     else:
+#         scaler = joblib.load(scaler_file)
+#         scaled_features = scaler.transform(features)
+#     return scaled_features
 
 
-def finalScore(scaled_features, is_training, min_max_weight_file, weights):
-    color_final = np.dot(scaled_features, weights)
-    #Normalizing the final scores to (0, 1) in the weighted final average, and differentiating between training and test data
-    if is_training == True:
-        color_final_min = color_final.min()
-        color_final_max = color_final.max()
-        color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
-        with open(f"{min_max_weight_file}", "w") as f:
-            json.dump({"min": float(color_final_min), "max": float(color_final_max)}, f)
-    else:
-        with open(f"{min_max_weight_file}", "r") as f:
-            min_max = json.load(f)
-        color_final_min = min_max["min"]
-        color_final_max = min_max["max"]
-        color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
-        #If testing data hits extremas outside of the min max from the testing range, we limit the data to the [0, 1] scale in order to keep predictions intact (unintended behaviour can occur using certain models if they are outside of known range)
-        color_final = np.clip(color_final, 0, 1)
-    return color_final
-
-
-#Getting the scaled features
-
+# def finalScore(scaled_features, is_training, min_max_weight_file, weights):
+#     color_final = np.dot(scaled_features, weights)
+#     #Normalizing the final scores to (0, 1) in the weighted final average, and differentiating between training and test data
+#     if is_training == True:
+#         color_final_min = color_final.min()
+#         color_final_max = color_final.max()
+#         color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
+#         with open(f"{min_max_weight_file}", "w") as f:
+#             json.dump({"min": float(color_final_min), "max": float(color_final_max)}, f)
+#     else:
+#         with open(f"{min_max_weight_file}", "r") as f:
+#             min_max = json.load(f)
+#         color_final_min = min_max["min"]
+#         color_final_max = min_max["max"]
+#         color_final = (color_final - color_final_min) / (color_final_max - color_final_min)
+#         #If testing data hits extremas outside of the min max from the testing range, we limit the data to the [0, 1] scale in order to keep predictions intact (unintended behaviour can occur using certain models if they are outside of known range)
+#         color_final = np.clip(color_final, 0, 1)
+#     return color_final
 
