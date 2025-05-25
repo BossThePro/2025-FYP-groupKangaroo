@@ -100,7 +100,7 @@ def extractColorFeatures(image, masked_image, mask, reference_colors):
 
     if n_clusters > 0:
         #Apply KMeans
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+        kmeans = KMeans(n_clusters=n_clusters, random_state=9)
         kmeans.fit(lesion_pixels)
         #Create an image for clustered colors
         #clustered_image = np.zeros_like(image)
@@ -155,7 +155,7 @@ def extractColorFeatures(image, masked_image, mask, reference_colors):
         print("No important colors found, skipping K-Means clustering.")
 
 
-#The part below is no longer used, check out colorTest for new version of handling this part
+#The part below is no longer used, since we cannot normalize with test data present, so it's better to do later such that we do not need to rerun the test scores all of the time
 
 # for img_id in imageList:
 #     image, masked_image, mask = loadImage(img_id, filePathImage, filePathMask)
