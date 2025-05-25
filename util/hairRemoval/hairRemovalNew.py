@@ -134,6 +134,18 @@ def hairFeatures(img):
     
     return blackhatBlack, blackhatScoreBlack, thresholdBlack, blackhatWhite, blackhatScoreWhite, thresholdWhite
 
+def colorCheck(img):
+    # Run the Canny edge detector on grayscale to find edges
+    gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    edges = cv.Canny(gray, 70, 200, None, 3)
+    # Find the color of the edge pixels
+    edge_colors = img[np.where(edges > 0)]
+    # Calculate the average color value and normalize it
+    dimensions = list(np.shape(edge_colors))[:2]
+    colorvalue = edge_colors.sum()/(dimensions[0]*dimensions[1]*255)
+    colorvalue = np.clip(colorvalue, 0, 255)
+    return colorvalue
+
 def removeHairNew(img, radius=3):
     # First get all of the features and scores.
     blackhatBlack, blackhatScoreBlack, thresholdBlack, blackhatWhite, blackhatScoreWhite, thresholdWhite = hairFeatures(img)
@@ -143,7 +155,23 @@ def removeHairNew(img, radius=3):
     # cv.waitKey(0)
     # cv.destroyAllWindows()
     
-    if blackhatScoreBlack <= blackhatScoreWhite and blackhatScoreWhite > 0.9:
+    # If both scores are high, run an additional color check
+    if blackhatScoreBlack > 0.8 and blackhatScoreWhite > 0.8:
+        colorvalue = colorCheck(img)
+        
+        if colorvalue < 60:
+            # intensify the hair countours in preparation for the inpainting algorithm
+            _, thresh = cv.threshold(blackhatBlack, thresholdBlack, 255, cv.THRESH_BINARY)
+
+            # inpaint the original image depending on the mask
+            img_out = cv.inpaint(img, thresh, radius, cv.INPAINT_TELEA)
+        else:
+            # intensify the hair countours in preparation for the inpainting algorithm
+            _, thresh = cv.threshold(blackhatWhite, thresholdWhite, 255, cv.THRESH_BINARY)
+
+            # inpaint the original image depending on the mask
+            img_out = cv.inpaint(img, thresh, radius, cv.INPAINT_TELEA)
+    elif blackhatScoreBlack <= blackhatScoreWhite:
         # intensify the hair countours in preparation for the inpainting algorithm
         _, thresh = cv.threshold(blackhatBlack, thresholdBlack, 255, cv.THRESH_BINARY)
 
@@ -155,10 +183,31 @@ def removeHairNew(img, radius=3):
 
         # inpaint the original image depending on the mask
         img_out = cv.inpaint(img, thresh, radius, cv.INPAINT_TELEA)
-    else:
+    return img_out
+
+def removeHairNewer(img, radius=3):
+    # First get all of the features and scores.
+    blackhatBlack, blackhatScoreBlack, thresholdBlack, blackhatWhite, blackhatScoreWhite, thresholdWhite = hairFeatures(img)
+    
+    # cv.imshow("Black", blackhatBlack)
+    # cv.imshow("White", blackhatWhite)
+    # cv.waitKey(0)
+    # cv.destroyAllWindows()
+    
+    colorvalue = colorCheck(img)
+    
+    # If both scores are high, run an additional color check
+    if colorvalue < 60:
         # intensify the hair countours in preparation for the inpainting algorithm
         _, thresh = cv.threshold(blackhatBlack, thresholdBlack, 255, cv.THRESH_BINARY)
-
+        
         # inpaint the original image depending on the mask
         img_out = cv.inpaint(img, thresh, radius, cv.INPAINT_TELEA)
+    else:
+        # intensify the hair countours in preparation for the inpainting algorithm
+        _, thresh = cv.threshold(blackhatWhite, thresholdWhite, 255, cv.THRESH_BINARY)
+        
+        # inpaint the original image depending on the mask
+        img_out = cv.inpaint(img, thresh, radius, cv.INPAINT_TELEA)
+
     return img_out
