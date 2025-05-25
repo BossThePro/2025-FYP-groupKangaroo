@@ -7,6 +7,8 @@ import numpy as np
 #Reading in data from training and color feature
 df_training = pd.read_csv("../../data/trainingTesting/training_data.csv")
 df_color_features = pd.read_csv("../../data/color/training_color_non_normalized_features.csv")
+df_asymmetry_features = pd.read_csv("../../data/asymmetry/ass_scores_naive_train.csv")
+df_color_features["asymmetry_score"] = df_asymmetry_features["asymmetry_score"]
 labels = df_training["cancerous/non-cancerous"].values
 
 #Excluding img_id and cancer/noncancer columns from training data (should not be used as a predictor)
@@ -24,12 +26,19 @@ labels = labels[not_nan_mask]
 for fold, (train_index, val_index) in enumerate(kf.split(X_all), 1):
     X_train, X_val = X_all[train_index], X_all[val_index]
     y_train, y_val = labels[train_index], labels[val_index]
-    #Normalization using MinMaxScaler
-    scaler = MinMaxScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
-    X_train_scaled = X_train_scaled
-    X_val_scaled = X_val_scaled
+    X_train_color = X_train[:, :-1]  # all columns except last
+    X_train_asymmetry = X_train[:, -1].reshape(-1, 1)  # last column as 2D array
+
+    X_val_color = X_val[:, :-1]
+    X_val_asymmetry = X_val[:, -1].reshape(-1, 1)
+    #Scale them separately
+    scaler_color = MinMaxScaler()
+
+    X_train_color_scaled = scaler_color.fit_transform(X_train_color)
+    X_val_color_scaled = scaler_color.transform(X_val_color)
+    X_train_scaled = np.hstack([X_train_color_scaled, X_train_asymmetry])
+    X_val_scaled = np.hstack([X_val_color_scaled, X_val_asymmetry])
+    print(X_train_scaled.shape)
     print(X_train_scaled)
     # #Using a weighted average to get one final score, these values will be refined over time through training the model:
     # weights = np.array([
@@ -53,7 +62,7 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_all), 1):
     # val_scores = (val_scores - score_min) / (score_max - score_min)
     # val_scores = np.clip(val_scores, 0, 1)
     #Training a given model
-    model = LogisticRegression(class_weight={"cancerous":1, "non-cancerous":1})
+    model = LogisticRegression(class_weight={"cancerous":1.25, "non-cancerous":1})
     model.fit(X_train_scaled, y_train)
     #Predicting based on validation
     y_pred = model.predict(X_val_scaled)
