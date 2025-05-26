@@ -3,7 +3,7 @@ import pandas as pd
 
 #Load the CSV files
 color_features_df = pd.read_csv('../../data/color/color_non_normalized_features.csv')
-training_data_df = pd.read_csv('../../data/trainingTesting/training_data.csv')
+training_data_df = pd.read_csv('../../data/trainingTesting/test_data.csv')
 training_data_df["img_id"] = training_data_df["img_id"].str.replace(".png", "")
 
 #Assuming both files have a column named 'img_id'
@@ -18,4 +18,4 @@ training_color_features_df = pd.merge(
 )
 
 # Save to new CSV
-training_color_features_df.to_csv('../../data/color/training_color_non_normalized_features.csv', index=False)
+training_color_features_df.to_csv('../../data/color/testing_color_non_normalized_features.csv', index=False)

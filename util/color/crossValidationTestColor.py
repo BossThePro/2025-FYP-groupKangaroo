@@ -31,7 +31,7 @@ feature_columns = [col for col in df_color_features.columns if col not in exclud
 X_all = df_color_features[feature_columns].values.astype(float)
 #Defines the positive label in our dataset (cancerous in our case)
 pos_label = "cancerous"
-#Defines 5 splits for cross-validation
+#Defines 6 splits for cross-validation
 kf = KFold(n_splits=6, shuffle=True)
 not_nan_mask = ~np.isnan(X_all).any(axis=1)
 X_all = X_all[not_nan_mask]
@@ -54,7 +54,7 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_all), 1):
     X_val_color = X_val[:, :n_color]
     X_val_asymmetry = X_val[:, n_color:n_color+n_asym]
     X_val_haralick = X_val[:, n_color+n_asym:n_color+n_asym+n_haralick]
-    X_val_border = X_val[:, n_color+n_asym+n_haralick:]
+    X_val_border = X_val[:, n_color+n_asym+n_haralick:n_color+n_asym+n_haralick+n_border]
     # Scale color and haralick separately
     scaler_color = MinMaxScaler()
     print(X_train_asymmetry)
