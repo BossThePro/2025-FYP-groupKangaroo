@@ -13,9 +13,9 @@ import numpy as np
 #Reading in data from training and color feature
 df_training = pd.read_csv("../../data/trainingTesting/training_data.csv")
 df_color_features = pd.read_csv("../../data/color/training_color_non_normalized_features.csv")
-df_asymmetry_features = pd.read_csv("../../data/asymmetry/ass_scores_naive_train.csv")
+df_asymmetry_features = pd.read_csv("../../data/asymmetry/ass_scores_2Features.csv")
 df_haralick_features = pd.read_csv("../../data/Haralick/HaralickFeatures.csv")
-df_border_features = pd.read_csv("../../data/Border/Border_Features.csv")
+df_border_features = pd.read_csv("../../data/Border/Border_features.csv")
 df_border_features["img_id"] = df_border_features["img_id"].str.replace(".png", "")
 df_haralick_features["img_id"] = df_haralick_features["img_id"].str.replace(".png", "")
 df_color_features["asymmetry_score"] = df_asymmetry_features["asymmetry_score"]
@@ -41,9 +41,9 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_all), 1):
     y_train, y_val = labels[train_index], labels[val_index]
    # Split the features
     n_color = 12
-    n_asym = 1
+    n_asym = 2
     n_haralick = 13
-    n_border = 3
+    n_border = 4
     #Training
     X_train_color = X_train[:, :n_color]
     X_train_asymmetry = X_train[:, n_color:n_color+n_asym]
@@ -57,15 +57,14 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_all), 1):
     X_val_border = X_val[:, n_color+n_asym+n_haralick:]
     # Scale color and haralick separately
     scaler_color = MinMaxScaler()
-
+    print(X_train_asymmetry)
 
     X_train_color_scaled = scaler_color.fit_transform(X_train_color)
     X_val_color_scaled = scaler_color.transform(X_val_color)
+    #Combine everything: color + asymmetry (not scaled) + haralick
+    X_train_scaled = np.hstack([X_train_color_scaled ,X_train_asymmetry, X_train_border, X_train_haralick])
 
-    # Combine everything: color + asymmetry (not scaled) + haralick
-    X_train_scaled = np.hstack([X_train_color_scaled, X_train_asymmetry, X_train_haralick, X_train_border])
-
-    X_val_scaled = np.hstack([X_val_color_scaled, X_val_asymmetry, X_val_haralick, X_val_border])
+    X_val_scaled = np.hstack([X_val_color_scaled, X_val_asymmetry, X_val_border, X_val_haralick])
 
     #Applying PCA to reduce amount of features
     #pca = PCA(n_components = "mle")
@@ -102,7 +101,7 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_all), 1):
     model.fit(X_train_scaled, y_train)
     #Predicting based on validation
     y_pred = model.predict(X_val_scaled)
-    #probs = model.predict_proba(X_val_scaled)[:, 1]
+    probs = model.predict_proba(X_val_scaled)[:, 1]
 
     #Calculating metrics
     acc = accuracy_score(y_val, y_pred)
@@ -115,7 +114,7 @@ for fold, (train_index, val_index) in enumerate(kf.split(X_all), 1):
     FN = cm[0, 1]
     FP = cm[1, 0]
     TN = cm[1, 1]
-    #print(probs)
+    print(probs)
     print(f"Fold {fold} Metrics:")
     print(f"Accuracy:  {acc:.4f}")
     print(f"Precision: {prec:.4f}")
