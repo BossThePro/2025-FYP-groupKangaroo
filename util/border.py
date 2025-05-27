@@ -1,19 +1,265 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from skimage import morphology
-from skimage.color import rgb2gray
+
+# skimage
 from skimage import io, color, filters, measure, morphology, exposure
-from skimage.morphology import binary_dilation, binary_erosion, disk
-from scipy.spatial import ConvexHull
-from collections import deque
-from scipy import ndimage as ndi
-from skimage.util import random_noise
-from skimage.segmentation import slic, active_contour
-from skimage.color import rgb2lab
-from sklearn.cluster import KMeans
+from skimage.color import rgb2gray, rgb2lab
 from skimage.filters import gaussian
+from skimage.measure import label, regionprops
+from skimage.morphology import binary_dilation, binary_erosion, disk, convex_hull_image
+from skimage.segmentation import slic, active_contour
+from skimage.util import random_noise
+
+# scipy
+from scipy import ndimage as ndi
+from scipy.ndimage import gaussian_filter1d, binary_fill_holes
+from scipy.spatial import ConvexHull
+
+# sklearn
+from sklearn.cluster import KMeans
+from sklearn.linear_model import LinearRegression
+
+# collections
+from collections import deque
+
 class Border:
+    def intensity_based_fractal_dimensions(self, image_path, epsilons=[2, 4, 8, 16, 32], visualize=False):
+        """
+        Compute the intensity-based fractal dimension of a grayscale image.
+        Optionally visualize grid overlays for each epsilon.
+
+        Parameters:
+            image_path (str): Path to the image.
+            epsilons (list): List of box sizes (ε) to use for the grid.
+            visualize (bool): Whether to show grid overlays for each ε.
+
+        Returns:
+            float: Estimated fractal dimension.
+        """
+        # Load and convert image to grayscale
+        img_gray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        if img_gray is None:
+            raise FileNotFoundError(f"Could not read image at {image_path}")
+        h, w = img_gray.shape
+
+        log_eps = []
+        log_I = []
+
+        for eps in epsilons:
+            I_eps = 0
+            if visualize:
+                # Load color image for drawing (optional)
+                img_color = cv2.imread(image_path)
+            
+            for y in range(0, h, eps):
+                for x in range(0, w, eps):
+                    cell = img_gray[y:y+eps, x:x+eps]
+                    if cell.size == 0:
+                        continue
+                    delta_I = int(np.max(cell)) - int(np.min(cell))
+                    I_eps += (delta_I + 1)
+
+                    # Draw grid cell (optional)
+                    if visualize and img_color is not None:
+                        cv2.rectangle(img_color, (x, y), (x+eps, y+eps), color=(0, 255, 0), thickness=1)
+
+            if I_eps > 0:
+                log_eps.append(np.log(1.0 / eps))
+                log_I.append(np.log(I_eps))
+
+                # Show the grid overlay for this ε
+                if visualize and img_color is not None:
+                    img_rgb = cv2.cvtColor(img_color, cv2.COLOR_BGR2RGB)
+                    plt.figure(figsize=(6, 6))
+                    plt.imshow(img_rgb)
+                    plt.title(f"Grid Overlay (ε = {eps})")
+                    plt.axis('off')
+                    plt.show()
+
+        # Linear regression on log-log plot
+        X = np.array(log_eps).reshape(-1, 1)
+        y = np.array(log_I)
+        model = LinearRegression().fit(X, y)
+        fd = model.coef_[0]
+
+        return fd
+
+    """
+    def intensity_based_fractal_dimension(self, image_path, epsilons=[2, 4, 8, 16, 32]):
+        """"""
+        Compute the intensity-based fractal dimension of a grayscale image.
+        Parameters:
+            image_path (str): Path to the image.
+            epsilons (list): List of box sizes (ε) to use for the grid.
+        Returns:
+            float: Estimated fractal dimension.
+        """ """
+        # Load and convert image to grayscale
+        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            raise FileNotFoundError(f"Could not read image at {image_path}")
+        h, w = img.shape
+
+        log_eps = []
+        log_I = []
+
+        for eps in epsilons:
+            I_eps = 0
+            for y in range(0, h, eps):
+                for x in range(0, w, eps):
+                    cell = img[y:y+eps, x:x+eps]
+                    if cell.size == 0:
+                        continue
+                    delta_I = int(np.max(cell)) - int(np.min(cell))
+                    I_eps += (delta_I + 1)
+            if I_eps > 0:
+                log_eps.append(np.log(1.0 / eps))
+                log_I.append(np.log(I_eps))
+
+        # Linear regression on log-log plot
+        X = np.array(log_eps).reshape(-1, 1)
+        y = np.array(log_I)
+        model = LinearRegression().fit(X, y)
+        fd = model.coef_[0]
+
+        return fd
+    """
+    def compute_fractal_BII(self, mask_path):
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        if mask is None:
+            print(f"Error reading {mask_path}")
+            return 0.0
+        
+        _, mask_bin = cv2.threshold(mask, 127, 1, cv2.THRESH_BINARY)
+        
+        # Keep only largest connected component (remove islands)
+        labels = measure.label(mask_bin, connectivity=2)
+        if labels.max() == 0:
+            return 0.0
+        largest_label = np.argmax(np.bincount(labels.flat)[1:]) + 1
+        largest_component = (labels == largest_label)
+        
+        # Fill holes inside the largest component
+        filled_mask = binary_fill_holes(largest_component).astype(np.uint8)
+        
+        # Extract contours
+        contours, _ = cv2.findContours(filled_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours:
+            return 0.0
+        
+        # Create binary image of contours only
+        boundary_img = np.zeros_like(filled_mask, dtype=np.uint8)
+        cv2.drawContours(boundary_img, contours, -1, 1, 1)
+        
+        # Compute fractal dimension of the contour image
+        fd = self.fractal_dimension(boundary_img)
+        return fd
+    """    
+    def peaks(self, mask_path, sigma=2):
+        
+        Compute a raw irregularity score from a binary lesion mask.
+
+        Parameters:
+            mask_path (str): Path to binary mask.
+            sigma (float): Gaussian smoothing parameter for radius smoothing.
+
+        Returns:
+            float: Normalized radial irregularity score.
+        
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        if mask is None:
+            raise FileNotFoundError(f"Cannot read mask at: {mask_path}")
+
+        _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours:
+            
+            raise ValueError(f"No contour found in mask: {mask_path}")
+            
+        # Use the largest contour
+        contour = max(contours, key=cv2.contourArea)
+
+        # Centroid
+        M = cv2.moments(contour)
+        if M["m00"] == 0:
+            raise ValueError("Zero area contour.")
+        cx = int(M["m10"] / M["m00"])
+        cy = int(M["m01"] / M["m00"])
+   
+        # Get radii from centroid
+        radii = []
+        angles = []
+        for point in contour:
+            x, y = point[0]
+            dx = x - cx
+            dy = y - cy
+            r = np.sqrt(dx**2 + dy**2)
+            theta = np.arctan2(dy, dx)
+            radii.append(r)
+            angles.append(theta)
+
+        # Sort by angle for continuity
+        angles = np.array(angles)
+        radii = np.array(radii)
+        angles = (angles + 2 * np.pi) % (2 * np.pi)
+        sorted_indices = np.argsort(angles)
+        sorted_radii = radii[sorted_indices]
+
+        # Smooth the radius sequence
+        smoothed_radii = gaussian_filter1d(sorted_radii, sigma=sigma)
+
+        # Compute normalized absolute deviation
+        mean_radius = np.mean(smoothed_radii)
+        irregularity_score = np.mean(np.abs(smoothed_radii - mean_radius)) / mean_radius
+
+        return irregularity_score
+ """
+
+    def compute_solidity(self, mask_path):
+        """
+        Computes the solidity of a lesion from a mask image file.
+
+        Args:
+            mask_path (str): Path to the binary mask image (white lesion on black background).
+
+        Returns:
+            float: Solidity score (0 to 1). Returns 0.0 if invalid.
+        """
+        # Load mask as grayscale
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        if mask is None:
+            print(f"Error: could not read mask at {mask_path}")
+            return 0.0
+
+        # Convert to binary (values: 0 or 1)
+        _, mask_bin = cv2.threshold(mask, 127, 1, cv2.THRESH_BINARY)
+
+        # Compute region properties
+        props = measure.regionprops(mask_bin.astype(np.uint8))
+        if not props:
+            return 0.0
+
+        # Get largest region (in case of noise or multiple)
+        largest_region = max(props, key=lambda x: x.area)
+
+        # Return solidity
+        return largest_region.solidity
+    
+    """ 
+    Didnt make sense to include, unless we could identify the correect lesion.
+    def extract_largest_region(self, mask):
+        labeled_mask = label(mask)
+        regions = regionprops(labeled_mask)
+
+        if not regions:
+            return np.zeros_like(mask)
+
+        # Find the largest region
+        largest_region = max(regions, key=lambda r: r.area)
+        largest_mask = labeled_mask == largest_region.label
+        return largest_mask
+ """  
     def compactness(self, mask_file):
         # Reads the file as grayscale
         mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
@@ -34,315 +280,69 @@ class Border:
             return 0.0  # Avoid division by zero
 
         # Compute compactness
-        compactness = (4 * np.pi * A) / (L ** 2)
+        compactness = (L ** 2) / (4 * np.pi * A)
+        #compactness = (4 * np.pi * A) / (L ** 2)
         
         return compactness
-    """
-    def compact_CV(self, mask_file):
-        mask = cv2.imread(mask_file)
-        mask_gray = rgb2gray(mask)
-        
-        # Threshold the grayscale image to binary
-        mask_bin = mask_gray > 0.5
-        
-        # Compute area: count all True values
-        A = np.sum(mask_bin)
-
-        # Find contours in the binary mask
-        contours = measure.find_contours(mask_bin, level=0.5)
-        
-        # Compute perimeter by summing arc lengths of all contours
-        L = sum(
-            np.sum(np.sqrt(np.sum(np.diff(contour, axis=0) ** 2, axis=1)))
-            for contour in contours
-        )
-        
-        # Compactness formula: (4πA) / L²
-        compactness = (4 * np.pi * A) / (L ** 2) if L != 0 else 0
-        
-        return compactness
-        """
+    
 #Irregulairity index, starts from 1, mostly goes up till 1.5 if no noise.     
-    def convexity(self, mask_file):
-        # Load and binarize mask
-        mask = cv2.imread(mask_file)
-        if mask is None:
-            return 0.0  # Handle failed load
-        
-        mask = (rgb2gray(mask) > 0.5).astype(np.uint8)
-        if mask.sum() < 50:  # Skip tiny/noisy masks
-            return 0.0
+    def convexity(self, mask_path, debug=False):
+        try:
+            mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+            if mask is None:
+                print(f"Mask is None for path: {mask_path}")
+                raise ValueError(f"Invalid mask path or file: {mask_path}")
 
-        # Get convex hull perimeter
-        coords = np.column_stack(np.where(mask > 0))
-        if len(coords) < 3:  # Not enough points for a hull
-            return 0.0
-        
-        hull = ConvexHull(coords)
-        hull_coords = coords[np.append(hull.vertices, hull.vertices[0])]
-        hull_perimeter = np.sum(np.linalg.norm(np.diff(hull_coords, axis=0), axis=1))
-        
-        # Get actual perimeter
-        perimeter = measure.perimeter(mask)
-        if hull_perimeter == 0:  # Avoid division by zero
-            return 0.0
+            if debug:
+                cv2.imshow("Input Mask", mask)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
 
-        convex_score = perimeter / hull_perimeter
-        #convex_norm = np.clip((1.5 - convex_score) / 0.5, 0, 1)  # Clip to [0, 1]
-        return convex_score
-    
-    """
-    #Used to normalize sharpness, set the max and min to 30 and 5 respectively.
-    def normalize_sharpness(self, score, min_val=5, max_val=30):
-        normalized = (score - min_val) / (max_val - min_val)
-        return np.clip(normalized, 0, 1)
-    """
+            _, binary = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+            white_pixels = np.sum(binary > 0)
+            print(f"White pixels: {white_pixels}")
+            if white_pixels < 100:
+                print("Too few white pixels, returning 1.0")
+                return 1.0
 
-    #Influenced by masks, if not correct placed around the lesions borders.
-    """ Very basic, uses just the mask and gets the sharpness from the border and caclculating the gradients"""
-    def sharpness(self, image, mask_file):
-        """
-        Computes the normalized sharpness score of a lesion's border.
-        
-        Args:
-            image (np.ndarray): Input BGR image.
-            mask_file (str): Path to the lesion mask.
-            
-        Returns:
-            float: Normalized sharpness score [0, 1].
-        """
-        #Load and preprocess mask (ensure binary)
-        mask = cv2.imread(mask_file)
-        if mask is None:
-            return 0.0  # Mask failed to load
-        
-        mask = rgb2gray(mask)
-        mask = (mask > 0.5).astype(np.uint8) * 255  # Binary mask (0 or 255)
+            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            print(f"Number of contours found: {len(contours)}")
+            if not contours:
+                print("No contours found, returning 1.0")
+                return 1.0
 
-        #Convert image to grayscale
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
-        #Compute gradient magnitude (Sobel edges)
-        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-        gradient_magnitude = np.sqrt(sobelx**2 + sobely**2)
+            largest_contour = max(contours, key=cv2.contourArea)
+            contour_area = cv2.contourArea(largest_contour)
+            print(f"Largest contour area: {contour_area}")
+            if contour_area < 1:
+                print("Largest contour area too small, returning 1.0")
+                return 1.0
 
-        #Find lesion boundary from mask
-        contours = measure.find_contours(mask, 0.5)
-        if not contours:
-            return 0.0  # No contours found
-        
-        boundary = max(contours, key=len)  # Select longest contour
-        boundary = np.round(boundary).astype(int)
+            perimeter = cv2.arcLength(largest_contour, True)
+            hull = cv2.convexHull(largest_contour)
+            hull_perimeter = cv2.arcLength(hull, True)
+            print(f"Perimeter: {perimeter}, Hull perimeter: {hull_perimeter}")
 
-        #Extract gradient values along the boundary
-        grad_values = [
-            gradient_magnitude[y, x]
-            for y, x in boundary
-            if 0 <= y < gradient_magnitude.shape[0] and 0 <= x < gradient_magnitude.shape[1]
-        ]
-        
-        if len(grad_values) < 10:  # Too few points to trust
-            return 0.0
+            if hull_perimeter < 1e-6 or perimeter < 1e-6:
+                print("Perimeter(s) too small, returning 1.0")
+                return 1.0
 
-        #Compute and normalize sharpness
-        raw_score = np.mean(grad_values)
-        return raw_score
-    
-    """
-    def sharpness_color_gradients(self, image, mask_file):
-    
-        # Load mask and convert to grayscale binary mask
-        mask = cv2.imread(mask_file)
-        mask_gray = rgb2gray(mask)
-        
-        # Find contours in the mask to get the lesion boundary
-        contours = measure.find_contours(mask_gray, 0.5)
-        if not contours:
-            return 0.0
-        boundary = max(contours, key=len)
-        boundary = np.round(boundary).astype(int)
+            convexity_score = max(1.0, perimeter / hull_perimeter)
+            print(f"Convexity score: {convexity_score}")
 
-        # Calculate Sobel gradient magnitude for each color channel
-        grad_mags = []
-        for c in range(3):
-            channel = image[:, :, c]
-            sobelx = cv2.Sobel(channel, cv2.CV_64F, 1, 0, ksize=3)
-            sobely = cv2.Sobel(channel, cv2.CV_64F, 0, 1, ksize=3)
-            grad_mag = np.sqrt(sobelx**2 + sobely**2)
-            grad_mags.append(grad_mag)
+            if debug:
+                debug_img = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+                cv2.drawContours(debug_img, [largest_contour], -1, (0, 255, 0), 2)
+                cv2.drawContours(debug_img, [hull], -1, (0, 0, 255), 2)
+                cv2.imshow("Contour (Green) vs Convex Hull (Red)", debug_img)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
 
-        # Average gradient magnitude across the 3 channels
-        gradient_magnitude = np.mean(grad_mags, axis=0)
+            return float(convexity_score)
 
-        # Extract gradient values at the boundary points
-        grad_values = []
-        for y, x in boundary:
-            if 0 <= y < gradient_magnitude.shape[0] and 0 <= x < gradient_magnitude.shape[1]:
-                grad_values.append(gradient_magnitude[y, x])
+        except Exception as e:
+            print(f"Error processing {mask_path}: {str(e)}")
+            return 1.00
 
-        if len(grad_values) == 0:
-            return 0.0
-
-        # Normalize sharpness score (use your existing normalize method)
-        mean_grad = np.mean(grad_values)
-        score = self.normalize_sharpness(mean_grad)
-        return score
-    """
-    """
-    def computeScore(self, image, mask_file):
-        #Image needs to be without hair, so processed.
-        sharpness_score = self.sharpness_color_gradients(image, mask_file)
-        compactness_score = self.compactness(mask_file)
-        convexity_score = self.convexity(mask_file)
-        #Every score is normalized to a ratio from 0 till 1, where 1 is perfect, the compactness, sharpness and convexity
-        #are absolute perfect and the irregularity_score is also perfect.
-        #And 0 are worst, this can likely happen if the compactness or convexity is influenced by the shape
-        #of the mask.
-        irregularity_score = np.mean([sharpness_score,compactness_score,convexity_score])
-        return irregularity_score
-    """
-    def visualize_sharpness(self, image, mask_file):
-        # Read and convert the mask
-        mask = cv2.imread(mask_file)
-        mask = rgb2gray(mask)
-
-        # Convert the image to grayscale
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-        # Compute Sobel gradients
-        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-        gradient_magnitude = np.sqrt(sobelx**2 + sobely**2)
-
-        # Find contours
-        contours = measure.find_contours(mask, 0.5)
-        if not contours:
-            print("No contours found.")
-            return
-
-        # Visualize contours
-        plt.figure(figsize=(8, 8))
-        plt.imshow(image[..., ::-1])  # Convert BGR to RGB for displaying with matplotlib
-        for contour in contours:
-            plt.plot(contour[:, 1], contour[:, 0], linewidth=2, color='red')
-        plt.title("Lesion Contour on Original Image")
-        plt.axis('off')
-        plt.show()
-
-        # Optionally, return the first contour if you need to use it later
-        return contours[0]
-  
-    """Adaptive sharpness method using border bands. Might be useful, when the masks arent reliable and you want to try
-    and take outside the masks boundary. The mask can miss the boundary between skin and lesion, which might not get the correct
-    sharpness feature then. Using this method, it will increase the chance of correct calculations of sharpness"""
-    def soft_border_gradient_sharpness(self, image_rgb, mask, border_width=None, visualize=False):
-        """
-        Calculate border sharpness using multi-scale gradient analysis in LAB color space.
-
-        Args:
-            image_rgb: Input RGB image (0-255 range)
-            mask: Binary mask of the lesion
-            border_width: Optional fixed border width (automatically calculated if None)
-            visualize: Whether to generate visualization plots
-            
-        Returns:
-            Raw sharpness score, need to be normalized after it has been run through all the data.
-        """
-        # Validate inputs
-        if not isinstance(mask, np.ndarray) or mask.dtype != bool:
-            mask = mask.astype(bool)
-        if np.sum(mask) == 0:
-            return 0.0
-        if np.sum(mask) < 50:
-            return 0.0
-
-        # Preprocessing - convert to LAB and use L channel
-        #Labdog
-        lab = rgb2lab(image_rgb / 255.0)
-        l_channel = lab[:, :, 0].astype(np.float32)
-
-        # Adaptive contrast enhancement
-        l_channel = exposure.equalize_adapthist(l_channel/np.max(l_channel))
-
-        # Compute gradients using Scharr operator (more accurate than Sobel for 3x3 according to the internet)
-        grad_x = cv2.Scharr(l_channel, cv2.CV_64F, 1, 0)
-        grad_y = cv2.Scharr(l_channel, cv2.CV_64F, 0, 1)
-        gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
-
-        # Calculate adaptive border width based on lesion characteristics
-        if border_width is None:
-            properties = measure.regionprops(mask.astype(int))
-            if not properties:
-                return 0.0
-                
-            major_axis = properties[0].major_axis_length
-            border_width = max(2, int(major_axis * 0.05))  # 5% of major axis length
-
-        # Multi-scale border analysis with weighted sampling
-        sharpness_values = []
-        weights = [0.2, 0.6, 0.2]  # Emphasize middle scale
-        scales = [0.5, 1.0, 2.0]    # Relative scale factors
-
-        for scale, weight in zip(scales, weights):
-            width = max(1, int(border_width * scale))
-            
-            # Create border band
-            outer = binary_dilation(mask, disk(width))
-            inner = binary_erosion(mask, disk(width))
-            border_band = np.logical_and(outer, ~inner)
-            
-            if np.sum(border_band) > 0:
-                # Use percentile to be robust to outliers
-                band_values = gradient_magnitude[border_band]
-                sharpness_values.append(weight * np.percentile(band_values, 85))
-
-        if not sharpness_values:
-            return 0.0
-
-        # Combine multi-scale measurements
-        sharpness_score = np.sum(sharpness_values)
-
-        # Normalize based on image-wide gradient distribution
-        norm_factor = np.percentile(gradient_magnitude, 95)
-        if norm_factor > 0:
-            sharpness_score /= norm_factor
-
-        # Visualization if requested
-        if visualize:
-            self._visualize_border_sharpness(
-                image_rgb, mask, gradient_magnitude, 
-                border_width, sharpness_score
-            )
-
-        return sharpness_score
     
 
-
-    def _visualize_border_sharpness(self, image_rgb, mask, gradient_mag, width, score):
-        """Helper method for visualization"""
-        fig, ax = plt.subplots(1, 3, figsize=(15, 5))
-
-        # Original image with contour
-        ax[0].imshow(image_rgb)
-        ax[0].contour(mask, colors='yellow', linewidths=1.5)
-        ax[0].set_title('Original Image')
-
-        # Gradient magnitude with optimal border
-        optimal_border = binary_dilation(mask, disk(width)) ^ binary_erosion(mask, disk(width))
-        gradient_display = np.log1p(gradient_mag)  # Log scale for better visibility
-        ax[1].imshow(gradient_display, cmap='viridis')
-        ax[1].contour(optimal_border, colors='red', linewidths=1)
-        ax[1].set_title(f'Gradient Magnitude\nBorder Width: {width}px')
-
-        # Overlay of gradient on image
-        ax[2].imshow(image_rgb)
-        gradient_normalized = gradient_mag / np.max(gradient_mag)
-        ax[2].imshow(gradient_normalized, cmap='hot', alpha=0.4)
-        ax[2].contour(mask, colors='lime', linewidths=2)
-        ax[2].set_title(f'Sharpness Score: {score:.3f}')
-
-        for a in ax:
-            a.axis('off')
-        plt.tight_layout()
-        plt.show()
