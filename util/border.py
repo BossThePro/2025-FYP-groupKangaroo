@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import pandas as pd
+from tqdm import tqdm
 
 # skimage
 from skimage import io, color, filters, measure, morphology, exposure
@@ -85,16 +88,16 @@ class Border:
 
         return fd
 
-    """
+    
     def intensity_based_fractal_dimension(self, image_path, epsilons=[2, 4, 8, 16, 32]):
-        """"""
+        """
         Compute the intensity-based fractal dimension of a grayscale image.
         Parameters:
             image_path (str): Path to the image.
             epsilons (list): List of box sizes (ε) to use for the grid.
         Returns:
             float: Estimated fractal dimension.
-        """ """
+        """ 
         # Load and convert image to grayscale
         img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         if img is None:
@@ -124,7 +127,7 @@ class Border:
         fd = model.coef_[0]
 
         return fd
-    """
+    
     def compute_fractal_BII(self, mask_path):
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
         if mask is None:
@@ -153,7 +156,7 @@ class Border:
         cv2.drawContours(boundary_img, contours, -1, 1, 1)
         
         # Compute fractal dimension of the contour image
-        fd = self.fractal_dimension(boundary_img)
+        fd = self.intensity_based_fractal_dimension(boundary_img)
         return fd
     """    
     def peaks(self, mask_path, sigma=2):
@@ -280,8 +283,8 @@ class Border:
             return 0.0  # Avoid division by zero
 
         # Compute compactness
-        compactness = (L ** 2) / (4 * np.pi * A)
-        #compactness = (4 * np.pi * A) / (L ** 2)
+        #compactness = (L ** 2) / (4 * np.pi * A) #for more circularity focused.
+        compactness = (4 * np.pi * A) / (L ** 2)
         
         return compactness
     
@@ -344,5 +347,50 @@ class Border:
             print(f"Error processing {mask_path}: {str(e)}")
             return 1.00
 
-    
 
+    def extract_border_features_to_csv(self,csv_file, image_folder, mask_folder, output_csv):
+        """
+        Extracts border-related features for each image in the CSV and saves to a new CSV.
+
+        Parameters:
+            csv_file (str): Path to CSV file containing image IDs.
+            image_folder (str): Path to folder containing the original images.
+            mask_folder (str): Path to folder containing the corresponding binary masks.
+            output_csv (str): Path to save the output feature CSV.
+        """
+        df = pd.read_csv(csv_file)
+        results = []
+
+        border = Border()
+
+        for _, row in tqdm(df.iterrows(), total=len(df)):
+            img_id = row['img_id']  # full image filename
+            image_path = os.path.join(image_folder, img_id)
+            mask_name = os.path.splitext(img_id)[0] + "_mask.png"
+            mask_path = os.path.join(mask_folder, mask_name)
+
+            feature_row = {"img_id": img_id}
+
+            try:
+                feature_row["compactness"] = border.compactness(mask_path)
+                feature_row["convexity"] = border.convexity(mask_path)
+                feature_row["solidity"] = border.compute_solidity(mask_path)
+                feature_row["fractal_dim"] = border.intensity_based_fractal_dimensions(image_path)
+            except Exception as e:
+                print(f"Failed to process {img_id}: {e}")
+                feature_row.update({
+                    "fractal_dim": None,
+                    "solidity": None,
+                    "compactness": None,
+                    "convexity": None
+                })
+
+            results.append(feature_row)
+
+
+        # Save to CSV
+        feature_df = pd.DataFrame(results)
+        feature_df.to_csv(output_csv, index=False)
+        print(f"Features saved to {output_csv}")
+
+    
