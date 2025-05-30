@@ -7,11 +7,13 @@ import os
 df = pd.read_csv("../data/metadata_clean_valid_mask_only.csv")
 imageList = df["img_id"]
 
+# Insert own path to the image output folder <--------------------
 output_dir = "../../../Documents/images_hair_removed/"
 os.makedirs(output_dir, exist_ok=True)
 count = 0
 for img in imageList:
     count += 1
+    # Insert own path to the input folder with all of the images <--------------------
     image_path = f"../../../Documents/images/{img}"
     img_array = cv2.imread(image_path)  # Read the image
     
