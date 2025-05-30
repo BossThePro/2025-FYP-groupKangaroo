@@ -2,40 +2,26 @@
 import cv2 as cv
 import numpy as np
 import math
+from PIL import Image
+import PIL.ImageOps   
 
 # Functions
+def convert_from_cv2_to_pil(img: np.ndarray) -> Image:
+    # return Image.fromarray(img)
+    return Image.fromarray(cv.cvtColor(img, cv.COLOR_BGR2RGB))
+
+
+def convert_from_pil_to_cv2(img: Image) -> np.ndarray:
+    # return np.asarray(img)
+    return cv.cvtColor(np.array(img), cv.COLOR_RGB2BGR)
+
 def reverseImage(img):
     # Color reverser start
-    # Copy the image and turn it into floats
-    # Makes it possible to work with 0-1 range
-    img_reverse = img.copy()
-    img_reverse = img_reverse.astype(float)
-    
-    # Find dimensions of image to loop through all pixels
-    dimensions = list(np.shape(img_reverse))[:2]
-    
-    # Loop through all pixels
-    for x in range(dimensions[0]):
-        for y in range(dimensions[1]):
-            # bgr color, b=0   g = 1   r = 2
-            
-            # Convert range from 0-255 to 0-1
-            img_reverse[x,y,2] = img_reverse[x,y,2] / 255
-            img_reverse[x,y,1] = img_reverse[x,y,1] / 255
-            img_reverse[x,y,0] = img_reverse[x,y,0] / 255
-            
-            # Reverse colors to make black -> white and white -> black
-            img_reverse[x,y,2] = img_reverse[x,y,2] * -1 + 1
-            img_reverse[x,y,1] = img_reverse[x,y,1] * -1 + 1
-            img_reverse[x,y,0] = img_reverse[x,y,0] * -1 + 1
-            
-            # Convert range from 0-1 to 0-255
-            img_reverse[x,y,2] = img_reverse[x,y,2] * 255
-            img_reverse[x,y,1] = img_reverse[x,y,1] * 255
-            img_reverse[x,y,0] = img_reverse[x,y,0] * 255
-    
-    img_reverse = np.clip(img_reverse.astype(np.uint8), 0, 255)
+    img = convert_from_cv2_to_pil(img)
+    img_reverse = PIL.ImageOps.invert(img)
+    img_reverse = convert_from_pil_to_cv2(img_reverse)
     # Color reverser end
+    
     # Make a grayscale image as well
     gray_reverse = cv.cvtColor(img_reverse, cv.COLOR_BGR2GRAY)
     return img_reverse, gray_reverse
@@ -156,7 +142,7 @@ def removeHairNew(img, radius=3):
     # cv.destroyAllWindows()
     
     # If both scores are high, run an additional color check
-    if blackhatScoreBlack > 0.8 and blackhatScoreWhite > 0.8:
+    if blackhatScoreBlack > 0.85 and blackhatScoreWhite > 0.85:
         colorvalue = colorCheck(img)
         
         if colorvalue < 60:
@@ -171,16 +157,17 @@ def removeHairNew(img, radius=3):
 
             # inpaint the original image depending on the mask
             img_out = cv.inpaint(img, thresh, radius, cv.INPAINT_TELEA)
-    elif blackhatScoreBlack <= blackhatScoreWhite:
+    elif blackhatScoreBlack >= blackhatScoreWhite:
         # intensify the hair countours in preparation for the inpainting algorithm
         _, thresh = cv.threshold(blackhatBlack, thresholdBlack, 255, cv.THRESH_BINARY)
 
         # inpaint the original image depending on the mask
         img_out = cv.inpaint(img, thresh, radius, cv.INPAINT_TELEA)
-    elif blackhatScoreWhite > blackhatScoreBlack:
+    elif blackhatScoreBlack < blackhatScoreWhite:
         # intensify the hair countours in preparation for the inpainting algorithm
         _, thresh = cv.threshold(blackhatWhite, thresholdWhite, 255, cv.THRESH_BINARY)
 
         # inpaint the original image depending on the mask
         img_out = cv.inpaint(img, thresh, radius, cv.INPAINT_TELEA)
+
     return img_out
