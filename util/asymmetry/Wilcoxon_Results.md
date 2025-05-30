@@ -10,7 +10,7 @@ Fig 1.1 Fold 5 from seed code 413316891 evaluating the features developed from A
 
 Given how poorly asymmetry performed in the model from this method, we decided on a far more naive approach. Rather than focusing on centroid and lesions themselves, asymmetry would now operate on the skin itself i.e. the whole image. The scope shifted from discriminating individual lesions asymmetry and averaging; to is the skin of this region asymmetrical. An extremely naive model not supported by literature. With the same seed number of 413316891 the results performed significantly better on the same instance of data.
 
-![image2]https://github.com/BossThePro/2025-FYP-groupKangaroo/blob/main/data/asymmetry/Wilcoxon%20Images/Screenshot%202025-05-27%20143744.png
+![image2](https://github.com/BossThePro/2025-FYP-groupKangaroo/blob/main/data/asymmetry/Wilcoxon%20Images/Screenshot%202025-05-27%20143744.png)
 
 Fig 1.2 Fold 5 from seed code 413316891 evaluating the features developed from Naive_Asym_Generator.ipynb
 
