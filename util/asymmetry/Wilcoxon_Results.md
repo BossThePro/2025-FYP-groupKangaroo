@@ -5,11 +5,13 @@ Many asymmetry algorithms in dermoscopic image analysis rely on the lesion being
 Additionally, we introduced a relative bias weight scoring, inspired by the observation that a cluster of components localized within a small spatial range may indicate irregular growth. To evaluate the features, a model was trained independently within our model framework. The seed code of 413316891 was used to evaluate the efficacy of the features.
 
 ![image1](https://github.com/BossThePro/2025-FYP-groupKangaroo/blob/main/data/asymmetry/Wilcoxon%20Images/Screenshot%202025-05-27%20143835.png)
+
 Fig 1.1 Fold 5 from seed code 413316891 evaluating the features developed from Asym_Comp&ABR_Generator.ipynb
 
 Given how poorly asymmetry performed in the model from this method, we decided on a far more naive approach. Rather than focusing on centroid and lesions themselves, asymmetry would now operate on the skin itself i.e. the whole image. The scope shifted from discriminating individual lesions asymmetry and averaging; to is the skin of this region asymmetrical. An extremely naive model not supported by literature. With the same seed number of 413316891 the results performed significantly better on the same instance of data.
 
-![image]https://github.com/BossThePro/2025-FYP-groupKangaroo/blob/main/data/asymmetry/Wilcoxon%20Images/Screenshot%202025-05-27%20143744.png
+![image2]https://github.com/BossThePro/2025-FYP-groupKangaroo/blob/main/data/asymmetry/Wilcoxon%20Images/Screenshot%202025-05-27%20143744.png
+
 Fig 1.2 Fold 5 from seed code 413316891 evaluating the features developed from Naive_Asym_Generator.ipynb
 
 To test the significance of the features increased performance a Wilcoxon Test was implemented with a hypothesis test of: 
@@ -17,7 +19,8 @@ H_0 = Model A (Asym_Comp&ABR_Generator.ipynb)  = Model B (Naive_Asym_Generator.i
 H_A = Model A (Asym_Comp&ABR_Generator.ipynb) < Model B (Naive_Asym_Generator.ipynb)
 Across all 8 folds we saw statistical significance for all at alpha 0.05. Even more so there is strong statistical significance for Accuracy, Recall and F1 Score at alpha 0.01. Thus the features are statistically more significant in diagnosing cancer. 
 
-![image2](https://github.com/BossThePro/2025-FYP-groupKangaroo/blob/main/data/asymmetry/Wilcoxon%20Images/Screenshot%202025-05-27%20153403.png)
+![image3](https://github.com/BossThePro/2025-FYP-groupKangaroo/blob/main/data/asymmetry/Wilcoxon%20Images/Screenshot%202025-05-27%20153403.png)
+
 Figure 1.3 Showing the results of the Wilcoxon Test
 
 While performing better the multicollinearity that exists in this model should be viewed with scepticism with a 0.9, Pearson's R relationship between ASI and asymmetry score. Essentially because they are computed in nearly the same method, an error conducted in methods that should be avoided in future.
@@ -25,6 +28,7 @@ With multiple lesions, the definition of what is considered irregular becomes am
 
 
 ![image3](https://github.com/BossThePro/2025-FYP-groupKangaroo/blob/main/data/asymmetry/Wilcoxon%20Images/PAT_87_133_391.png)![image4](https://github.com/BossThePro/2025-FYP-groupKangaroo/blob/main/data/asymmetry/Wilcoxon%20Images/PAT_87_133_391_mask.png)
+
 Figure 1.4 PAT_87_133_391.png showing a benign lesion 
 
 The computed asymmetry of Figure 1.4 is high in both feature extractions. With an overall mean asymmetry score of 0.6380 in Asym_Comp&ABR_Generator.ipynb and a mean asymmetry score of 0.8039 with an ASI of 90.47% Naive_Asym_Generator.ipynb. Thus reinforcing that asymmetry alone is a poor feature without anything to mediate it.
