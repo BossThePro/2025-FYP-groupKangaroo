@@ -42,7 +42,7 @@ n_border = 4
 X_color = X_all[:, :n_color]
 X_asym = X_all[:, n_color:n_color + n_asym]
 X_haralick = X_all[:, n_color + n_asym:n_color + n_asym + n_haralick]
-X_border = X_all[:, n_color + n_asym + n_haralick:]
+X_border = X_all[:, n_color + n_asym + n_haralick: ]
 
 #Scaling on the color feature
 scaler_color = MinMaxScaler()
@@ -82,7 +82,7 @@ df_test = pd.read_csv("../../data/trainingTesting/test_data.csv")
 df_test_color = pd.read_csv("../../data/color/testing_color_non_normalized_features.csv")
 df_test_asym = pd.read_csv("../../data/asymmetry/asym_scores_test.csv")
 df_test_haralick = pd.read_csv("../../data/Haralick/HaralickFeaturesTest.csv")
-df_test_border = pd.read_csv("../../data/Border/Border_Features_Test.csv")
+df_test_border = pd.read_csv("../../data/Border/Border_features_Test.csv")
 
 df_test_asym["img_id"] = df_test_asym["img_id"].str.replace(".png", "")
 df_test_border["img_id"] = df_test_border["img_id"].str.replace(".png", "")
@@ -115,7 +115,8 @@ X_test_final = np.hstack([X_test_color_scaled, X_test_asym, X_test_border, X_tes
 
 #Predict test values based on model
 y_pred_test = model.predict(X_test_final)
-probs_test = model.predict_proba(X_test_final)[:, 1]
+cancerous_index = np.where(model.classes_ == "cancerous")[0][0]
+probs_test = model.predict_proba(X_test_final)[:, cancerous_index]
 
 # Evaluation on model
 pos_label = "cancerous"
@@ -134,3 +135,19 @@ print(f"F1 Score:  {f1:.4f}")
 print("Confusion Matrix:")
 print(f" TP: {TP} | FN: {FN}")
 print(f" FP: {FP} | TN: {TN}")
+
+
+#Extracting matching img_ids after removing NaNs
+img_ids_test = df_test_color["img_id"].values
+img_ids_test = img_ids_test[not_nan_mask]
+
+#Creating a DataFrame for the probabilities with corresponding img_ids
+df_probs = pd.DataFrame({
+    "img_id": img_ids_test,
+    "predicted_probability_cancerous": probs_test
+})
+
+#Save to CSV
+df_probs.to_csv("test_predicted_probabilities_cancerous_with_haralick.csv", index=False)
+print("Saved predicted probabilities to predicted_probabilities_with_img_ids.csv")
+

@@ -1,3 +1,4 @@
+# In order to run this part of the feature extraction you must give the file path to the images and masks folder when prompted, e.g. "/home/user/Documents/images" for images (linux, not sure how it looks on windows)
 import superpixel as color
 import pandas as pd
 import numpy as np
