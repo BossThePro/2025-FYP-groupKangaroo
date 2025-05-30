@@ -25,6 +25,17 @@ from sklearn.linear_model import LinearRegression
 
 # collections
 from collections import deque
+"""
+Class for extracting features according to border irregularity
+You call the last method: extract_border_features_to_csv() to extract all features according to a csv, with a mask directory
+and an image directory, as well a output.csv filename, which saves it into data folder.
+
+
+
+Then the features can be imported into the model after that.
+The indivdual feature extractions can be run seperatly. Read the arguments, to what they need and call it using the class object.
+"""
+
 
 class Border:
     def intensity_based_fractal_dimensions(self, image_path, epsilons=[2, 4, 8, 16, 32], visualize=False):
@@ -348,7 +359,7 @@ class Border:
             return 1.00
 
 
-    def extract_border_features_to_csv(self,csv_file, image_folder, mask_folder, output_csv):
+    def extract_border_features_to_csv(self,csv_file, image_folder, mask_folder):
         """
         Extracts border-related features for each image in the CSV and saves to a new CSV.
 
@@ -390,7 +401,7 @@ class Border:
 
         # Save to CSV
         feature_df = pd.DataFrame(results)
-        feature_df.to_csv(output_csv, index=False)
-        print(f"Features saved to {output_csv}")
+        feature_df.to_csv("data/Border_features.csv", index=False)
+        print(f"Features saved to data/Border_features.csv")
 
     
